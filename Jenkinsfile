@@ -40,7 +40,7 @@ pipeline {
                 echo "<--------Jar Publish Started--------->"
                 script {
                     withCredentials([usernamePassword(credentialsId: 'pandit', usernameVariable: 'ART_USER', passwordVariable: 'ART_PASS')]) {
-                        def properties = "buildId=${env.BUILD_ID},commitid=${GIT_COMMIT}"
+                        def properties = "buildid=${env.BUILD_ID},commitid=${GIT_COMMIT}"
                         def uploadSpec = """{
                           "files": [
                             {
