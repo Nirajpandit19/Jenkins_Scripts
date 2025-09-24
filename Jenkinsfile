@@ -20,7 +20,7 @@ pipeline {
                     sh """
                         mvn clean deploy \
                         -Dmaven.test.skip=true \
-                        -DaltDeploymentRepository=artifactory::default::https://${ART_USER}:${ART_PASS}@${registry}/pandit-libs-release-local
+                        -DaltDeploymentRepository=artifactory::default::https://${ART_USER}:${ART_PASS}@${registry}/ui/admin/repositories/pandit-libs-release-local
                     """
                 }
                 echo "<--------Building Ended--------->"
