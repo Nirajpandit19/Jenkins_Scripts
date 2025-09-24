@@ -1,8 +1,7 @@
-def registry = "https://triald31qcj.jfrog.io"
+def registry = "https://triald31qcj.jfrog.io/artifactory"
 
 pipeline {
     agent any
-
     environment {
         PATH = "/opt/maven/bin:$PATH"
     }
@@ -14,10 +13,14 @@ pipeline {
             }
         }
 
-        stage("Build") {
+        stage("Build & Deploy") {
             steps {
                 echo "<--------Building Started--------->"
-                sh 'mvn clean deploy -Dmaven.test.skip=true'
+                sh """
+                    mvn clean deploy \
+                    -Dmaven.test.skip=true \
+                    -DaltDeploymentRepository=artifactory::default::${registry}/libs-release-local
+                """
                 echo "<--------Building Ended--------->"
             }
         }
@@ -29,39 +32,5 @@ pipeline {
                 echo "<--------Testing Ended--------->"
             }
         }
-
-        stage("Jar Publish") {
-            steps {
-                script {
-                    echo "<--------Jar Publish Started--------->"
-
-                    def server = Artifactory.newServer(
-                        url: registry + "/artifactory",
-                        credentialsId: "38c3d30d-602b-45bd-98aa-76de50fcc84d"
-                    )
-
-                    def properties = "buildId=${env.BUILD_ID};commitid=${GIT_COMMIT}"
-
-                    def uploadSpec = """{
-                        "files": [
-                            {
-                                "pattern": "jarstaging/(*)",
-                                "target": "pandit-libs-release-local",
-                                "flat": false,
-                                "props": "${properties}",
-                                "exclusions": ["*.sha1","*.md5"]
-                            }
-                        ]
-                    }"""
-
-                    def buildInfo = server.upload(uploadSpec)
-                    buildInfo.env.collect()
-                    server.publishBuildInfo(buildInfo)
-
-                    echo "<--------Jar Publish Ended--------->"
-                }
-            }
-        }
     }
 }
-
