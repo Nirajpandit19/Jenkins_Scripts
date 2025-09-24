@@ -1,70 +1,111 @@
-// Define the URL of the Artifactory registry
-def registry = "https://triald31qcj.jfrog.io"
+def registry = "https://triald31qcj.jfrog.io/artifactory"
+def artifactoryServerId = "pandit-artifactory"
 
-pipeline {                                    // 1  // Defines the start of the Jenkins pipeline block
-
-    agent any                                 // Specifies the pipeline can run on any available agent
-
-    environment {                             // 2  // Defines environment variables for the pipeline
-        PATH = "/opt/maven/bin:$PATH"         // Adds Maven's path to the system's PATH variable
-    }                                         // 2  // Ends the environment block
-
-    stages {                                  // 3  // Defines the stages block where multiple stages are declared
-
-        stage("build") {                      // 4  // Creates a stage named 'build'
-            steps {                           // 5  // Defines the steps that will be executed in this stage
-                echo "----------- build started ----------"  
-                                              // Logs a message indicating the start of the build
-                sh 'mvn clean deploy -Dmaven.test.skip=true'  
-                                              // Runs Maven clean and deploy commands, skipping tests
-                echo "----------- build completed ----------"  
-                                              // Logs a message indicating the build completion
-            }                                 // 5  // Ends the steps block for 'build' stage
-        }                                     // 4  // Ends the 'build' stage
-
-        stage("test") {                       // 6  // Creates a stage named 'test'
-            steps {                           // 7  // Defines the steps that will be executed in this stage
-                echo "----------- unit test started ----------"  
-                                              // Logs a message indicating the start of unit tests
-                sh 'mvn surefire-report:report'  
-                                              // Runs the Maven Surefire report to execute unit tests
-                echo "----------- unit test completed ----------"  
-                                              // Logs a message indicating unit test completion
-            }                                 // 7  // Ends the steps block for 'test' stage
-        }                                     // 6  // Ends the 'test' stage
-
-        stage("Jar Publish") {                // 14  // Creates a stage named 'Jar Publish'
-            steps {                           // 15  // Defines the steps that will be executed in this stage
-                script {                      // 16  // Allows running custom Groovy script inside the pipeline
-                    echo '<--------------- Jar Publish Started --------------->'  
-                                              // Logs a message indicating the start of JAR publishing
-                    def server = Artifactory.newServer url: registry + "/artifactory", credentialsId: "pandit"  
-                                              // Defines the Artifactory server with the specified URL and credentials
-                    def properties = "buildid=${env.BUILD_ID},commitid=${GIT_COMMIT}"  
-                                              // Sets properties like build ID and Git commit ID for the build
+pipeline {
+    agent any
+    
+    environment {
+        PATH = "/opt/maven/bin:$PATH"
+    }
+    
+    stages {
+        stage("Git Clone") {
+            steps {
+                git url: 'https://github.com/Nirajpandit19/java-hello-world-with-maven.git', branch: 'master'
+            }
+        }
+        
+        stage("Build") {
+            steps {
+                echo "<--------Building Started--------->"
+                sh 'mvn clean compile'
+                echo "<--------Building Ended--------->"
+            }
+        }
+        
+        stage("Test") {
+            steps {
+                echo "<--------Testing Started--------->"
+                sh 'mvn test'
+                sh 'mvn surefire-report:report'
+                echo "<--------Testing Ended--------->"
+            }
+        }
+        
+        stage("Package") {
+            steps {
+                echo "<--------Packaging Started--------->"
+                sh 'mvn package -DskipTests'
+                echo "<--------Packaging Ended--------->"
+            }
+        }
+        
+        stage("Deploy to Artifactory") {
+            steps {
+                echo "<--------Deploy to Artifactory Started--------->"
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'pandit', usernameVariable: 'ART_USER', passwordVariable: 'ART_PASS')]) {
+                        // Configure Maven settings for deployment
+                        sh """
+                            mvn deploy \
+                            -DskipTests \
+                            -DaltDeploymentRepository=artifactory::default::${registry}/pandit-libs-release-local \
+                            -Dusername=${ART_USER} \
+                            -Dpassword=${ART_PASS}
+                        """
+                    }
+                }
+                echo "<--------Deploy to Artifactory Ended--------->"
+            }
+        }
+        
+        stage("Jar Publish with Build Info") {
+            steps {
+                echo "<--------Jar Publish Started--------->"
+                script {
+                    // Configure Artifactory server
+                    def server = Artifactory.newServer url: registry, credentialsId: "pandit"
+                    
+                    // Create upload spec
                     def uploadSpec = """{
-                          "files": [
-                            {
-                              "pattern": "jarstaging/(*)",
-                              "target": "pandit-libs-release-local/{1}",
-                              "flat": "false",
-                              "props": "${properties}",
-                              "exclusions": [ "*.sha1", "*.md5"]
-                            }
-                         ]
-                     }"""  
-                                              // Defines the upload specification for uploading JAR files to Artifactory
-                    def buildInfo = server.upload(uploadSpec)  
-                                              // Uploads the files to Artifactory and collects build info
-                    buildInfo.env.collect()  
-                                              // Collects environment variables as part of the build info
-                    server.publishBuildInfo(buildInfo)  
-                                              // Publishes the build information to Artifactory
-                    echo '<--------------- Jar Publish Ended --------------->'  
-                                              // Logs a message indicating the end of JAR publishing
-                }                             // 16  // Ends the script block for 'Jar Publish' stage
-            }                                 // 15  // Ends the steps block for 'Jar Publish' stage
-        }                                     // 14  // Ends the 'Jar Publish' stage
-
-    }                                         // 3  // Ends the stages block
-}                                             // 1  // Ends the pipeline block
+                      "files": [
+                        {
+                          "pattern": "target/*.jar",
+                          "target": "pandit-libs-release-local/",
+                          "flat": true,
+                          "props": "buildId=${env.BUILD_ID};commitId=${env.GIT_COMMIT}",
+                          "exclusions": ["*.sha1", "*.md5"]
+                        }
+                      ]
+                    }"""
+                    
+                    // Upload artifacts and collect build info
+                    def buildInfo = Artifactory.newBuildInfo()
+                    buildInfo.env.collect()
+                    server.upload spec: uploadSpec, buildInfo: buildInfo
+                    server.publishBuildInfo buildInfo
+                }
+                echo "<--------Jar Publish Ended--------->"
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Archive test results
+            junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
+            
+            // Archive artifacts
+            archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: true
+            
+            // Clean workspace
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
