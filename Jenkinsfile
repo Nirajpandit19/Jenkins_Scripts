@@ -1,4 +1,4 @@
-def registry = "https://triald31qcj.jfrog.io"
+def registry = "https://triald31qcj.jfrog.io/artifactory"
 
 pipeline {
     agent any
@@ -20,7 +20,7 @@ pipeline {
                     sh """
                         mvn clean deploy \
                         -Dmaven.test.skip=true \
-                        -DaltDeploymentRepository=artifactory::default::https://${ART_USER}:${ART_PASS}@${registry}/ui/admin/repositories/pandit-libs-release-local
+                        -DaltDeploymentRepository=artifactory::default::https://${ART_USER}:${ART_PASS}@${registry}/pandit-libs-release-local
                     """
                 }
                 echo "<--------Building Ended--------->"
@@ -53,7 +53,7 @@ pipeline {
                           ]
                         }"""
 
-                        def server = Artifactory.newServer url: registry, credentialsId: "jfrog-creds"
+                        def server = Artifactory.newServer url: registry, credentialsId: "pandit"
                         def buildInfo = server.upload(uploadSpec)
                         buildInfo.env.collect()
                         server.publishBuildInfo(buildInfo)
