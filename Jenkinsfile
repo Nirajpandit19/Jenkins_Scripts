@@ -4,14 +4,14 @@ pipeline {
     agent any
     
     tools {
-        maven 'Maven-3.9.4'  // Name from Global Tool Configuration
+        maven 'Maven-3.9.11'  // Name from Global Tool Configuration
         jdk 'Java-21'        // Name from Global Tool Configuration
     }
     
     environment {
         MAVEN_OPTS = '-Xmx1024m'
         JAVA_HOME = tool 'Java-21'
-        MAVEN_HOME = tool 'Maven-3.9.4'
+        MAVEN_HOME = tool 'Maven-3.9.11'
         PATH = "${MAVEN_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
     }
     
